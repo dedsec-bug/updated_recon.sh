@@ -10,10 +10,6 @@ fi
 
 cd ~/siddharth/recon/$1/$(date +"%d-%m-%Y")
 
-echo -e "\e[1;33m[+] Scanning DNS/TLS Bufferover\e[0m"
-curl -s https://dns.bufferover.run/dns?q=$1 | grep $1 | awk '{$1=$1};1' | awk -F, '{ print $2 }' | sed 's/"//g' >> dns.txt
-curl -s https://tls.bufferover.run/dns?q=$1 | grep $1 | awk '{$1=$1};1' | awk -F, '{ print $3 }' | sed 's/"//g' >> tls.txt
-
 echo -e "\e[1;33m[+] Running certspotter & CRTsh\e[0m"
 curl -s https://certspotter.com/api/v0/certs\?domain\=$1 | jq '.[].dns_names[]' | sed 's/\"//g' | sed 's/\*\.//g' | sort -u | grep $1 >> certspotter.txt
 curl -s https://crt.sh/?q=%25.$1 | grep $1 | grep "<TD>" | cut -d">" -f2 | cut -d"<" -f1 | sort -u | sed s/*.//g >> crtsh.txt
@@ -31,29 +27,29 @@ echo -e "\e[1;33m[+] Running Amass\e[0m"
 amass enum -passive -d $1 -o amass.txt
 
 echo -e "\e[1;33m[+] Running ShuffleDNS\e[0m"
-shuffledns -d $1 -massdns ~/pentest/massdns/bin/massdns -w /root/pentest/massdns/lists/all.txt -r /root/pentest/massdns/lists/resolvers.txt -o shuffledns.txt
+shuffledns -d $1 -massdns /root/massdns/bin/massdns -w /root/massdns/lists/all.txt -r /root/massdns/lists/resolvers.txt -o shuffledns.txt
 
 echo -e "\e[1;33m[+] Merging Files\e[0m"
 cat *.txt > all_old.txt
 sort -u all_old.txt > all.txt
 
 echo -e "\e[1;33m[+] Resolving Domains\e[0m"
-shuffledns -d $1 -massdns ~/pentest/massdns/bin/massdns -list all.txt -o domains.txt -r /root/pentest/massdns/lists/resolvers.txt
+shuffledns -d $1 -massdns /root/massdns/bin/massdns -list all.txt -o domains.txt -r /root/massdns/lists/resolvers.txt
 
 echo -e "\e[1;33m[+] Running HTTPx\e[0m"
 cat domains.txt | httpx -threads 200 -o live_domains.txt
 
 echo -e "\e[1;33m[+] Running Nuclei\e[0m"
-cat live_domains.txt | nuclei -t /root/pentest/nuclei-templates/cves/ -c 50 -o nuclei_cve.txt 
-cat live_domains.txt | nuclei -t /root/pentest/nuclei-templates/files/ -c 50 -o nuclei_files.txt
-cat live_domains.txt | nuclei -t /root/pentest/nuclei-templates/technologies -c 50 -o nuclei_technologies.txt
-cat live_domains.txt | nuclei -t /root/pentest/nuclei-templates/security-misconfiguration -c 50 -o nuclei_security-misconfiguration.txt
+cat live_domains.txt | nuclei -t /root/nuclei-templates/cves/ -c 50 -o nuclei_cve.txt 
+cat live_domains.txt | nuclei -t /root/nuclei-templates/files/ -c 50 -o nuclei_files.txt
+cat live_domains.txt | nuclei -t /root/nuclei-templates/technologies -c 50 -o nuclei_technologies.txt
+cat live_domains.txt | nuclei -t /root/nuclei-templates/security-misconfiguration -c 50 -o nuclei_security-misconfiguration.txt
 
 echo -e "\e[1;33m[+] Running WaybackUrl | GAU | Hakrawler\e[0m" 
 cat live_domains.txt | waybackurls | tee tmp-url.txt
 echo $1 | gau >> tmp-url.txt
 echo $1 | hakrawler | awk '{print $2}' >> tmp-url.txt
-cd /root/pentest/waybackMachine
+cd /root/tools/waybackMachine
 python waybackmachine.py $1 >> tmp-url
 cd ~/siddharth/recon/$1/$(date +"%d-%m-%Y")
 sort -u tmp-url.txt >>  tmp.txt
@@ -93,13 +89,13 @@ echo -e "\e[1;33m[+]Running Broken Link Checker 's\e[0m"
 blc $1 -ro -v > Bronke-link-checker.txt
 
 echo -e "\e[1;33m[+]Running ParamSpider 's\e[0m" 
-cd /root/pentest/ParamSpider/
+cd /root/tools/ParamSpider/
 python3 paramspider.py -d $1 -o ~/siddharth/recon/$1/$(date +"%d-%m-%Y")/paramspider.txt 
 cd ~/siddharth/recon/$1/$(date +"%d-%m-%Y")
 
 echo -e "\e[1;33m[+]Running FFUF 's\e[0m" 
-ffuf -c -w /root/pentest/massdns/lists/all.txt -u $1/FUZZ -mc all -fs 4242 -v -o fuff.txt 
+ffuf -c -w /root/massdns/lists/all.txt -u $1/FUZZ -mc all -fs 4242 -v -o fuff.txt 
 
 echo -e "\e[1;33m[+]Running Arjun 's\e[0m" 
-cd /root/pentest/Arjun/
+cd /root/tools/Arjun/
 python3 arjun.py --urls valid-urls.txt --get -o arjun.txt
